@@ -1,0 +1,16 @@
+[Unit]
+Description=Conductor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=pi
+Group=pi
+Type=simple
+Restart=always
+RestartSec=3
+WorkingDirectory=/home/pi/conductor
+ExecStart=/home/pi/.local/bin/poetry run python3 main.py
+
+[Install]
+WantedBy=multi-user.target
