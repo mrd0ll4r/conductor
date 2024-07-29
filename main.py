@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import threading
+
 import pika
 import json
 import requests
@@ -85,9 +87,13 @@ BASIC_LIGHT_ON_STATE = {
     }
 }
 
+# After how many seconds should the outdoor light turn off?
+FRONT_DOOR_TURN_OFF_DURATION_SECONDS = 30 * 60
+
 kaleidoscope_client: requests.Session = None
 
 basic_light_on = False
+front_door_turn_off_timer: threading.Timer = None
 
 
 def is_simple_click(event):
@@ -110,6 +116,7 @@ def is_long_press(event, seconds):
 
 def handle_front_door_buttons(alias, event):
     global basic_light_on
+    global front_door_turn_off_timer
 
     if alias == ALIAS_BUTTON_FRONT_DOOR_LEFT:
         if is_button_down(event):
@@ -134,6 +141,23 @@ def handle_front_door_buttons(alias, event):
     elif alias == ALIAS_BUTTON_FRONT_DOOR_RIGHT:
         if is_button_down(event):
             kaleidoscope_cycle_program(FIXTURE_FRONT_DOOR_LIGHT)
+            if not kaleidoscope_fixture_is_off(FIXTURE_FRONT_DOOR_LIGHT):
+                # If we turned it on, remember to turn it off at some point.
+                if VERBOSE:
+                    print("Setting front door turn-off timer")
+                front_door_turn_off_timer = threading.Timer(
+                    FRONT_DOOR_TURN_OFF_DURATION_SECONDS,
+                    kaleidoscope_set_program,
+                    args=[
+                        FIXTURE_FRONT_DOOR_LIGHT,
+                        PROGRAM_BUILTIN_OFF])
+                front_door_turn_off_timer.start()
+            else:
+                # If we turned it off, cancel the timer
+                if front_door_turn_off_timer is not None:
+                    if VERBOSE:
+                        print("Canceling front door turn-off timer")
+                    front_door_turn_off_timer.cancel()
         elif is_long_press(event, 1):
             if basic_light_on:
                 for fixture in BASIC_LIGHT_OFF_STATE:
